@@ -20,17 +20,15 @@ type fetcher struct {
 	search    string
 	topic     string
 	partition int
-	curOffset int64
-	endOffset int64
+	cur       int64
+	end       int64
 }
 
 func NewFetcher(broker string, topic string, partition int, search string, hoursBefore int) Fetcher {
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   []string{broker},
-		Topic:     topic,
-		Partition: partition,
-		// MinBytes:       10e3, // 10KB
-		MaxBytes:       10e6, // 10MB
+		Brokers:        []string{broker},
+		Topic:          topic,
+		Partition:      partition,
 		CommitInterval: 3600 * time.Second,
 	})
 	setStartOffset(r, hoursBefore)
@@ -46,8 +44,8 @@ func NewFetcher(broker string, topic string, partition int, search string, hours
 		search:    search,
 		topic:     topic,
 		partition: partition,
-		curOffset: 0,
-		endOffset: lag,
+		cur:       0,
+		end:       lag,
 	}
 }
 
@@ -55,7 +53,6 @@ func (f *fetcher) Close() {
 	if err := f.reader.Close(); err != nil {
 		fmt.Printf("failed to close conn %s[%d]: %v\n", f.topic, f.partition, err)
 	}
-	fmt.Printf("closed conn %s[%d]\n", f.topic, f.partition)
 }
 
 func (f *fetcher) Fetch() bool {
@@ -69,7 +66,7 @@ func (f *fetcher) Fetch() bool {
 		return false
 	}
 
-	f.curOffset = m.Offset + 1
+	f.cur++
 	s := string(m.Value)
 	if len(f.search) == 0 || strings.Contains(s, f.search) {
 		fmt.Printf(lib.MsgFmt, lib.SetTimeZone(m.Time), m.Topic, m.Partition, m.Offset, s)
@@ -79,7 +76,7 @@ func (f *fetcher) Fetch() bool {
 }
 
 func (f *fetcher) hasNext() bool {
-	return f.curOffset < f.endOffset
+	return f.cur < f.end
 }
 
 func setStartOffset(reader *kafka.Reader, hoursBefore int) {
